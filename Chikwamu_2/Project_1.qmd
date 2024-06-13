@@ -1,0 +1,312 @@
+---
+title: "Project_1"
+author: "Chisunta M Chikwamu"
+format: html
+editor: visual
+---
+
+## Data Loading
+
+Using the starter code provided to see what the data we are working with looks like.
+
+```{r}
+library(tidyverse)
+nhl_shots <- read_csv("https://raw.githubusercontent.com/36-SURE/36-SURE.github.io/main/data/nhl_shots.csv")
+```
+
+Data investigation:
+
+```{r}
+View(nhl_shots)
+head(nhl_shots, n=4)
+```
+
+# Question
+
+## What is the relationship between player fatigue and shot effectiveness?
+
+The variable that would indicate player fatigue would be how long they spend on ice and that is shooterTimeOnIce.
+
+Initial Hypothesis: The longer time the player spends on ice the less likely they are to score.
+
+```{r}
+summary(nhl_shots$event)
+summary(nhl_shots$shooterTimeOnIce)
+```
+
+Shot effectiveness can be analysed by looking at how many goals are made out of the total shot attempts for the particular time a player spends on Ice or how many shots generate rebounds, which gives the players another opportunity to make a shoot.
+
+Analyzing the distribution of "events" that happen when a shot is made.
+
+```{r}
+ nhl_shots|>
+   count(event) |> 
+   mutate(prop = n / sum(n))
+
+```
+
+```{r}
+nhl_shots|>
+  ggplot(aes(y = event)) +
+   geom_bar()
+```
+
+```{r}
+nhl_shots|>
+  ggplot(aes(x = shooterTimeOnIce, y = event, color = event)) +
+  geom_violin() +
+  geom_boxplot()
+```
+
+```{r}
+#Remove all the NA from the variables of interest
+clean_data <- nhl_shots |>
+  filter(!is.na(shooterTimeOnIce) & !is.na(event) & !is.na(shotDistance) & !is.na(shotType))
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+# Creating a clean dataset and segmenting ShooterTimeOnIce into bins
+clean_data <- clean_data|>
+  mutate(timeOnIceBin = cut(shooterTimeOnIce, breaks = seq(0, max(shooterTimeOnIce), by = 60),include.lowest = TRUE)) #optimal time for a player to be on is not less than 45s and no more than 90s
+```
+
+```{r}
+# Calculate shot effectiveness
+shot_effectiveness <- clean_data|>
+  group_by(timeOnIceBin)|>
+  filter(shooterTimeOnIce <= 240)|>
+  summarize(total_goals = sum(event == "GOAL"), 
+            total_shots = n(), 
+            effectiveness = total_goals / total_shots)
+# View the summary
+print(shot_effectiveness)
+```
+
+```{r}
+# Bar plot
+ggplot(shot_effectiveness, aes(x = timeOnIceBin, y = effectiveness)) +
+  geom_col(fill = "pink") +
+  geom_label(aes(label = scales::percent(effectiveness)), 
+             label.padding = unit(0.25, "lines"),
+             label.r = unit(0.15, "lines"),
+             label.size = 0.25,
+             na.rm = FALSE,
+             size = 3) +
+  labs(title = "Shot Effectiveness vs. Time on Ice",
+       x = "Time on Ice (seconds)",
+       y = "Goals per Shot Attempt") +
+  theme_minimal()
+```
+
+```{r}
+shot_effectiveness <- shot_effectiveness |>
+  mutate(prop = total_goals / total_shots,
+         se = sqrt(prop * (1 - prop) / total_shots),
+         lower = prop - 1.96 * se,
+         upper = prop + 1.96 * se)
+
+# Bar plot with confidence intervals
+shot_effectiveness |>
+  ggplot(aes(x = timeOnIceBin, y = prop)) +
+  geom_col(fill = "pink") +
+  geom_errorbar(aes(ymin = lower, ymax = upper), color = "blue", width = 0.2) +
+  labs(title = "Shot Effectiveness vs. Time on Ice with Confidence Intervals",
+       x = "Time on Ice (seconds)",
+       y = "Proportion of Goals") +
+  theme_minimal() +
+  geom_label(aes(label = scales::percent(prop)), vjust = -0.5)
+```
+
+```{r}
+ggplot(shot_effectiveness, aes(x = as.numeric(timeOnIceBin), y = effectiveness)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  labs(title = "Trend of Shot Effectiveness vs. Time on Ice",
+       x = "Time on Ice (seconds)",
+       y = "Goals per Shot Attempt") +
+  theme_minimal()
+
+```
+
+It makes sense that the longer the player spends on Ice the more shots they can make and that increases the probability of these shots being goals.
+
+What about whether a shot generated a rebound or not?
+
+```{r}
+ nhl_shots|>
+   count(shotGeneratedRebound) |> 
+   mutate(prop = n / sum(n))
+```
+
+Shot effectiveness based on whether it genereted a rebound or not:
+
+```{r}
+# Calculate shot effectiveness
+shot_effectiveness_R<- clean_data|>
+  group_by(timeOnIceBin)|>
+  filter(shooterTimeOnIce <= 240)|>
+  summarize(total_generatedRoubounds= sum(shotGeneratedRebound == 1), 
+            total_shots = n(), 
+            effectiveness = total_generatedRoubounds / total_shots)
+# View the summary
+print(shot_effectiveness_R)
+```
+
+```{r}
+# Bar plot
+ggplot(shot_effectiveness_R, aes(x = timeOnIceBin, y = effectiveness)) +
+  geom_col(fill = "pink") +
+  geom_label(aes(label = scales::percent(effectiveness)), 
+             label.padding = unit(0.25, "lines"),
+             label.r = unit(0.15, "lines"),
+             label.size = 0.25,
+             na.rm = FALSE,
+             size = 3) +
+  labs(title = "Shot Rebound Effectiveness vs. Time on Ice",
+       x = "Time on Ice (seconds)",
+       y = "Goals per Shot Attempt") +
+  theme_minimal()
+```
+
+## Clustering Analysis
+
+Possible Questions:
+
+1.  Are there differences in attacking patterns on whether a team is home or away? Or maybe scoring patterns? Do teams score more home or away?
+2.  Can we group teams by their defense mechanism on whether they are home or away?
+3.  Are there some shot types that are more frequent in certain distances from the goal that make goals?
+4.  Angle and location correlation
+5.  Do teams have similarities in terms of ShotAngles and ShotDistances for shots that make goals?
+
+```{r}
+#head(nhl_shots, n=4)
+clustering_view <- nhl_shots |>
+  select(teamCode,location,shotAngle,shotType, shotDistance, shooterTimeOnIce, event, arenaAdjustedYCord, arenaAdjustedXCord)
+clustering_view
+```
+
+```{r}
+library(dplyr)
+# Filter out rows with missing values in relevant columns
+clean_data_cluster <- clustering_view |>
+  filter(!is.na(shooterTimeOnIce) & !is.na(shotDistance) & !is.na(shotAngle) & !is.na(shotType) & !is.na(teamCode) & !is.na(location) & !is.na(event) &!is.na(arenaAdjustedXCord)
+         &!is.na(arenaAdjustedYCord)) 
+# Display the first 3 rows of the cleaned data
+head(clean_data_cluster, n = 3)
+```
+
+Normalizing Data
+
+```{r}
+library(cluster)
+library(factoextra)
+# Normalize the data for clustering
+shot_data_normalized <- clean_data_cluster |>
+  mutate(shotAngle = c(scale(shotAngle)), shotDistance = c(scale(shotDistance)), shooterTimeOnIce = c(scale(shooterTimeOnIce)),
+         arenaAdjustedYCord = c(scale(arenaAdjustedYCord)),
+        arenaAdjustedXCord = c(scale(arenaAdjustedXCord)) )
+head(shot_data_normalized, n=3)
+```
+
+## Creating New Metrics
+
+The idea is to see if there are similarities between the ShotAngles and ShotDistances that make goals for each team.
+
+```{r}
+# Select relevant features
+cluster_data <- clean_data_cluster |>
+  group_by(teamCode)|>
+  select(shotAngle,shotDistance)
+cluster_data
+```
+
+```{r}
+# Determine the optimal number of clusters using the Elbow Method
+fviz_nbclust(algorithm = "Lloyd", cluster_data, kmeans, method = "wss") +
+  labs(subtitle = "Elbow Method for Optimal Clusters")
+```
+
+```{r}
+# Assuming the optimal number of clusters is 4 (adjust based on Elbow Method result)
+set.seed(123)
+kmeans_result <- kmeans(cluster_data, centers = 5, nstart = 25)
+
+# Add cluster results to the data
+clean_data_cluster <- clean_data_cluster |>
+  mutate(Cluster = kmeans_result$cluster)
+
+```
+
+```{r}
+# Visualize the clusters
+fviz_cluster(kmeans_result, data = cluster_data,
+             geom = "point",
+             ellipse.type = "norm",
+             ggtheme = theme_minimal()) +
+  labs(title = "K-Means Clustering of Shot Data",
+       x = "Shot Angle (normalized)",
+       y = "Shot Distance (normalized)")
+```
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(cluster)
+library(factoextra)
+library(ggplot2)
+
+# Encode team information using one-hot encoding
+team_data <- model.matrix(~ teamCode - 1, data = clean_data_cluster)
+shot_data_normalized <- cbind(shot_data_normalized, team_data)
+
+# Combine normalized data with team information
+cluster_data <- shot_data_normalized |>
+  select(shotAngle, shotDistance, starts_with("teamCode"))
+
+# Convert to a data frame
+cluster_data <- as.data.frame(cluster_data)
+
+```
+
+```{r}
+# Perform K-Means clustering
+set.seed(123)
+kmeans_result <- kmeans(cluster_data, centers = 4, nstart = 25)
+
+# Add cluster results to the data
+clean_data_cluster <- clean_data_cluster %>%
+  mutate(Cluster = kmeans_result$cluster)
+```
+
+```{r}
+# Define the hockey field dimensions and plot settings
+hockey_field <- function() {
+  ggplot() +
+    geom_rect(aes(xmin = -100, xmax = 100, ymin = -42.5, ymax = 42.5), fill = "white", color = "black") +
+    geom_rect(aes(xmin = -89, xmax = 89, ymin = -42.5, ymax = 42.5), fill = NA, color = "red", linewidth = 1.5) +
+    geom_rect(aes(xmin = -64, xmax = 64, ymin = -42.5, ymax = 42.5), fill = NA, color = "blue", linewidth = 1.5) +
+    geom_point(aes(x = 0, y = 0), size = 5, color = "blue") +
+    geom_rect(aes(xmin = -10, xmax = 10, ymin = -42.5, ymax = 42.5), fill = NA, color = "black", linetype = "dashed") +
+    theme_minimal() +
+    coord_fixed() +
+    labs(title = "Shot Clusters on Hockey Field")
+}
+
+# Plot the clusters on a hockey field using arenaAdjustedXCord and arenaAdjustedYCord
+hockey_field() +
+  geom_point(data = clean_data_cluster, aes(x = arenaAdjustedXCord, y = arenaAdjustedYCord, color = as.factor(Cluster)), size = 3) +
+  scale_color_manual(values = c("red", "blue", "green", "purple")) +
+  theme(legend.position = "bottom")
+
+```
+
+## Question 3
+
+```{r}
+install.packages(c("cluster", "klaR", "dplyr"))
+library(cluster)
+library(klaR)
+library(dplyr)
+```
