@@ -36,7 +36,7 @@ shot_plot <- nhl_rink +
   geom_point(data = non_rebound_shots, aes(x = xCordAdjusted, y = yCordAdjusted), color = "gray", alpha = 0.3, size = 1) +
   geom_point(data = rebound_shots, aes(x = xCordAdjusted, y = yCordAdjusted, color = shotType), alpha = 0.7, size = 1) +
   scale_color_manual(values = c("WRIST" = "red", "SLAP" = "blue", "TIP" = "green", "SNAP" = "purple", "BACK" = "orange", "WRAP" = "yellow", "DEFL" = "pink")) +
-  labs(title = "Scatterplot of Shot and Rebound Locations by Shot Types", color = "Shot Type") +
-  facet_wrap(~shotType, ncol = 3) +
+  labs(title = "The Penguins Shot and Rebound Locations by Shot Types", color = "Shot Type") +
+  #facet_wrap(~shotType, ncol = 3) +
   theme(legend.position = "none")
 shot_plot
