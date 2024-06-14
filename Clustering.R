@@ -4,30 +4,11 @@ library(ggplot2)
 
 nhl_shots_penguins = subset(nhl_shots, teamCode == "PIT")
 
-##Shots cluster chart
-init_kmeans <- nhl_shots |>
-  select(xCordAdjusted, yCordAdjusted) |>
-  kmeans(algorithm = "Lloyd", centers = 5, nstart = 1)
-
-nhl_shots |>
-  mutate(shot_clusters = as.factor(init_kmeans$cluster)) |>
-  ggplot(aes(x = xCordAdjusted, y = yCordAdjusted, 
-             color = shot_clusters, shape = teamCode)) + 
-  geom_point(alpha = 0.5)
-
-##Team names cluster plot code
-#shooting average time on ice
-team_ave_shots = nhl_shots_5v5 |>
-  group_by(teamCode) |>
-  summarize(aveTOI = mean(shootingTeamAverageTimeOnIce), 
-            ave_xGoal = mean(xGoal))
-
-#average rest difference
-team_ave_shots.2 = nhl_shots_5v5 |>
-  group_by(teamCode) |>
-  summarize(ARD = mean(averageRestDifference), 
-            ave_xGoal = mean(xGoal))
-
+#gives total 5v5 goals (no empty net)
+nhl_shots_5v5 = subset(nhl_shots, 
+                       homeSkatersOnIce == 5 & 
+                         awaySkatersOnIce == 5 &
+                         awayEmptyNet == 0 & homeEmptyNet == 0)
 #expected rebounds
 team_ave_shots.3 = nhl_shots_5v5 |>
   group_by(teamCode) |>
